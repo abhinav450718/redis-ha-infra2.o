@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION        = "sa-east-1"
-        TF_DIR            = "terraform"
-        ANSIBLE_DIR       = "ansible"
-        SCRIPTS_DIR       = "scripts"
+        AWS_REGION   = "sa-east-1"
+        TF_DIR       = "terraform"
+        ANSIBLE_DIR  = "ansible"
+        SCRIPTS_DIR  = "scripts"
     }
 
     options {
@@ -65,12 +65,27 @@ pipeline {
             }
         }
 
-        stage('Install Ansible Roles & Show Inventory') {
+        stage('Prepare Ansible Environment') {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                      ansible-galaxy install -r requirements.yml
-                      ansible-inventory -i inventory/aws_ec2.yml --graph
+                        echo "=== Installing boto3 + botocore for AWS inventory plugin ==="
+                        pip3 install boto3 botocore --user
+
+                        echo "=== Ensuring correct ansible plugin path ==="
+                        mkdir -p ~/.ansible/plugins/inventory
+                        cp inventory/aws_ec2.yml ~/.ansible/plugins/inventory/aws_ec2.yml
+                    '''
+                }
+            }
+        }
+
+        stage('Show Dynamic Inventory') {
+            steps {
+                dir(ANSIBLE_DIR) {
+                    sh '''
+                        ansible-inventory -i inventory/aws_ec2.yml --list
+                        ansible-inventory -i inventory/aws_ec2.yml --graph
                     '''
                 }
             }
@@ -79,6 +94,7 @@ pipeline {
         stage('Configure Redis with Ansible') {
             steps {
                 dir(ANSIBLE_DIR) {
+
                     withCredentials([
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
                         [$class: 'UsernamePasswordMultiBinding',
@@ -86,10 +102,8 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
-                        sh '''
-                          chmod +x ../scripts/generate_inventory.sh
-                          chmod +x ../scripts/verify_redis.sh
 
+                        sh '''
                           export ANSIBLE_HOST_KEY_CHECKING=False
 
                           ansible-playbook \
