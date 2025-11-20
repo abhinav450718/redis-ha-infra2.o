@@ -22,7 +22,7 @@ pipeline {
             }
         }
 
-        stage('Terraform Init & Plan') {
+        stage('Terraform Init & Apply') {
             steps {
                 dir(TF_DIR) {
                     withCredentials([
@@ -35,29 +35,11 @@ pipeline {
                           terraform init -input=false
                           terraform fmt -recursive || true
                           terraform validate
-                          terraform plan -out=tfplan -input=false \
+
+                          terraform plan -out=tfplan \
                             -var="aws_region=$AWS_REGION"
-                        '''
-                    }
-                }
-            }
-        }
 
-        stage('Terraform Apply') {
-            steps {
-                timeout(time: 20, unit: 'MINUTES') {
-                    input message: 'Approve Terraform apply?', ok: 'Apply'
-                }
-
-                dir(TF_DIR) {
-                    withCredentials([
-                        [$class: 'UsernamePasswordMultiBinding',
-                         credentialsId: 'aws-creds',
-                         usernameVariable: 'AWS_ACCESS_KEY_ID',
-                         passwordVariable: 'AWS_SECRET_ACCESS_KEY']
-                    ]) {
-                        sh '''
-                          terraform apply -input=false tfplan
+                          terraform apply -auto-approve tfplan
                           terraform output -json > ../terraform_outputs.json
                         '''
                     }
@@ -69,11 +51,10 @@ pipeline {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                        echo "=== Installing boto3 + botocore via apt (safe method) ==="
-                        sudo apt-get update -y
-                        sudo apt-get install -y python3-boto3 python3-botocore
+                        echo "=== Installing boto3 + botocore for AWS dynamic inventory ==="
+                        pip3 install boto3 botocore --break-system-packages
 
-                        echo "=== boto3 + botocore ready ==="
+                        echo "=== boto3 ready ==="
                     '''
                 }
             }
@@ -93,6 +74,7 @@ pipeline {
         stage('Configure Redis with Ansible') {
             steps {
                 dir(ANSIBLE_DIR) {
+
                     withCredentials([
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
                         [$class: 'UsernamePasswordMultiBinding',
@@ -100,6 +82,7 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
+
                         sh '''
                           export ANSIBLE_HOST_KEY_CHECKING=False
 
