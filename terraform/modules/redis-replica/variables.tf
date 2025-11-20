@@ -1,5 +1,19 @@
-variable "subnet_id" {}
-variable "security_group_id" {}
-variable "ami_id" {}
-variable "key_name" {}
-variable "project_tag" {}
+variable "ami" {
+  type = string
+}
+
+variable "instance_type" {
+  type = string
+}
+
+variable "subnet_id" {
+  type = string
+}
+
+variable "security_group_id" {
+  type = string
+}
+
+variable "key_name" {
+  type = string
+}
