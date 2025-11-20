@@ -1,21 +1,15 @@
 ---
-plugin: amazon.aws.aws_ec2
-
+plugin: aws_ec2
 regions:
-  - sa-east-1
-
-filters:
-  tag:Project: "redis-ha-demo"
-
-strict: False
-
+  - "sa-east-1"
+keyed_groups:
+  - key: tags.Name
+    prefix: ""
 hostnames:
   - private-ip-address
-
 compose:
   ansible_host: private_ip_address
 
-groups:
-  master-redis: "'master' in tags.Role"
-  replica-redis: "'replica' in tags.Role"
-  bastion: "'bastion' in tags.Role"
+# NEW JUMP HOST CONFIG
+vars:
+  ansible_ssh_common_args: "-o ProxyCommand='ssh -i /var/lib/jenkins/.ssh/redis-ha-key -W %h:%p ec2-user@56.125.164.56'"
