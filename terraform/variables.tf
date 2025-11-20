@@ -10,10 +10,11 @@ variable "project_tag" {
 
 variable "key_name" {
   type        = string
-  default = "redis-ha-key"
+  default     = "redis-ha-key"
+  description = "SSH key name for EC2 instances"
 }
 
 variable "ami_id" {
   type        = string
-  description = "AMI ID for all EC2"
+  description = "AMI ID for all EC2 instances"
 }
