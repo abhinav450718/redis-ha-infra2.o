@@ -1,12 +1,21 @@
 ---
 - name: Configure Redis Master
-  hosts: master_redis
+  hosts: master
   become: yes
   roles:
     - geerlingguy.redis
+  vars:
+    redis_port: 6379
+    redis_bind: "0.0.0.0"
+    redis_replication_role: "master"
 
 - name: Configure Redis Replica
-  hosts: replica_redis
+  hosts: replica
   become: yes
   roles:
     - geerlingguy.redis
+  vars:
+    redis_port: 6379
+    redis_bind: "0.0.0.0"
+    redis_replication_role: "slave"
+    redis_master_ip: "{{ hostvars[groups['master'][0]].ansible_host }}"
