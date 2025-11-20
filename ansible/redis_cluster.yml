@@ -1,6 +1,6 @@
 ---
 - name: Configure Redis Master
-  hosts: master
+  hosts: _master
   become: yes
 
   tasks:
@@ -30,11 +30,11 @@
 
 
 - name: Configure Redis Replica
-  hosts: replica
+  hosts: _replica
   become: yes
 
   vars:
-    master_ip: "{{ hostvars[groups['master'][0]].ansible_host }}"
+    master_ip: "{{ hostvars[groups['_master'][0]].ansible_host }}"
 
   tasks:
     - name: Install redis
