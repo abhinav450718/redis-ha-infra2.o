@@ -1,26 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-SSH_KEY="$1"
-
-if [ -z "$SSH_KEY" ]; then
-  echo "Usage: verify_redis.sh <private_key>"
-  exit 1
-fi
+KEY_PATH="${1:-/var/lib/jenkins/redis-ha-key.pem}"
+INVENTORY="../ansible/inventory/aws_ec2.yml"
 
 echo "=== Fetching inventory info ==="
-MASTER=$(ansible-inventory -i ansible/inventory/aws_ec2.yml --host master-redis | grep ansible_host | awk '{print $2}')
-REPLICA=$(ansible-inventory -i ansible/inventory/aws_ec2.yml --host replica-redis | grep ansible_host | awk '{print $2}')
-BASTION=$(ansible-inventory -i ansible/inventory/aws_ec2.yml --host bastion | grep ansible_host | awk '{print $2}')
 
-echo "Master:  $MASTER"
-echo "Replica: $REPLICA"
-echo "Bastion: $BASTION"
-echo ""
+MASTER_IP=$(ansible-inventory -i "$INVENTORY" --list \
+  | python3 -c "import sys, json; inv=json.load(sys.stdin); print(inv['_master']['hosts'][0])")
 
+REPLICA_IP=$(ansible-inventory -i "$INVENTORY" --list \
+  | python3 -c "import sys, json; inv=json.load(sys.stdin); print(inv['_replica']['hosts'][0])")
+
+BASTION_IP=$(ansible-inventory -i "$INVENTORY" --list \
+  | python3 -c "import sys, json; inv=json.load(sys.stdin); print(inv['_bastion']['hosts'][0])")
+
+echo "Master:  $MASTER_IP"
+echo "Replica: $REPLICA_IP"
+echo "Bastion: $BASTION_IP"
+
+echo
 echo "=== Checking Redis Master Replication Info ==="
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ubuntu@$BASTION \
-  "ssh -i /home/ubuntu/id_rsa ubuntu@$MASTER 'redis-cli INFO replication'"
 
+ssh -i "$KEY_PATH" -o StrictHostKeyChecking=no ec2-user@"$BASTION_IP" \
+  "ssh -o StrictHostKeyChecking=no ec2-user@$MASTER_IP \
+   'redis-cli INFO replication | egrep \"role|connected_slaves\"'"
+
+echo
 echo "=== Checking Redis Replica Replication Info ==="
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ubuntu@$BASTION \
-  "ssh -i /home/ubuntu/id_rsa ubuntu@$REPLICA 'redis-cli INFO replication'"
+
+ssh -i "$KEY_PATH" -o StrictHostKeyChecking=no ec2-user@"$BASTION_IP" \
+  "ssh -o StrictHostKeyChecking=no ec2-user@$REPLICA_IP \
+   'redis-cli INFO replication | egrep \"role|master_host\"'"
