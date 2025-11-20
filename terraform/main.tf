@@ -15,7 +15,7 @@ module "bastion" {
   source            = "./modules/bastion"
   subnet_id         = module.network.public_subnet_id
   security_group_id = module.network.bastion_sg_id
-  key_name          = var.key_name
+  key_name          = aws_key_pair.redis_keypair.key_name
   ami_id            = var.ami_id
   project_tag       = var.project_tag
 }
@@ -24,7 +24,7 @@ module "redis_master" {
   source            = "./modules/redis-master"
   subnet_id         = module.network.private_subnet1_id
   security_group_id = module.network.db_sg_id
-  key_name          = var.key_name
+  key_name          = aws_key_pair.redis_keypair.key_name
   ami_id            = var.ami_id
   project_tag       = var.project_tag
 }
@@ -33,7 +33,7 @@ module "redis_replica" {
   source            = "./modules/redis-replica"
   subnet_id         = module.network.private_subnet2_id
   security_group_id = module.network.db_sg_id
-  key_name          = var.key_name
+  key_name          = aws_key_pair.redis_keypair.key_name
   ami_id            = var.ami_id
   project_tag       = var.project_tag
 }
