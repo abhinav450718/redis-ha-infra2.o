@@ -29,7 +29,7 @@ pipeline {
                     ]) {
 
                         sh '''
-                            terraform init -input=false
+                            terraform init -input=false -reconfigure
                             terraform fmt -recursive || true
                             terraform validate
 
