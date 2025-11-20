@@ -2,10 +2,13 @@ terraform {
   required_version = ">= 1.0.0"
 }
 
+# -------------------------
+#  VPC
+# -------------------------
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
   enable_dns_hostnames = true
+  enable_dns_support   = true
 
   tags = {
     Name    = "redis-vpc"
@@ -13,6 +16,9 @@ resource "aws_vpc" "main" {
   }
 }
 
+# -------------------------
+# Public Subnet
+# -------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
@@ -24,33 +30,37 @@ resource "aws_subnet" "public" {
   }
 }
 
+# -------------------------
+# Private Subnet 1
+# -------------------------
 resource "aws_subnet" "private1" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private1_subnet_cidr
 
   tags = {
-    Name    = "private-subnet-1"
+    Name    = "private1-subnet"
     Project = var.project_tag
   }
 }
 
+# -------------------------
+# Private Subnet 2
+# -------------------------
 resource "aws_subnet" "private2" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private2_subnet_cidr
 
   tags = {
-    Name    = "private-subnet-2"
+    Name    = "private2-subnet"
     Project = var.project_tag
   }
 }
 
+# -------------------------
+# Internet Gateway
+# -------------------------
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name    = "redis-gw"
-    Project = var.project_tag
-  }
 }
 
 resource "aws_route_table" "public_rt" {
@@ -60,11 +70,6 @@ resource "aws_route_table" "public_rt" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.gw.id
   }
-
-  tags = {
-    Name    = "public-rt"
-    Project = var.project_tag
-  }
 }
 
 resource "aws_route_table_association" "public_assoc" {
@@ -72,6 +77,9 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
+# -------------------------
+# Bastion SG
+# -------------------------
 resource "aws_security_group" "bastion_sg" {
   name   = "bastion-sg"
   vpc_id = aws_vpc.main.id
@@ -89,23 +97,14 @@ resource "aws_security_group" "bastion_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name    = "bastion-sg"
-    Project = var.project_tag
-  }
 }
 
-resource "aws_security_group" "redis_db_sg" {
-  name   = "redis-db-sg"
+# -------------------------
+# Redis SG
+# -------------------------
+resource "aws_security_group" "redis_sg" {
+  name   = "redis-sg"
   vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.bastion_sg.id]
-  }
 
   ingress {
     from_port   = 6379
@@ -114,22 +113,44 @@ resource "aws_security_group" "redis_db_sg" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
+  ingress {
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name    = "redis-db-sg"
-    Project = var.project_tag
-  }
 }
 
-output "vpc_id"               { value = aws_vpc.main.id }
-output "public_subnet_id"     { value = aws_subnet.public.id }
-output "private1_subnet_id"   { value = aws_subnet.private1.id }
-output "private2_subnet_id"   { value = aws_subnet.private2.id }
-output "bastion_sg_id"        { value = aws_security_group.bastion_sg.id }
-output "redis_db_sg_id"       { value = aws_security_group.redis_db_sg.id }
+# -------------------------
+# Outputs
+# -------------------------
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "public_subnet_id" {
+  value = aws_subnet.public.id
+}
+
+output "private1_subnet_id" {
+  value = aws_subnet.private1.id
+}
+
+output "private2_subnet_id" {
+  value = aws_subnet.private2.id
+}
+
+output "bastion_sg_id" {
+  value = aws_security_group.bastion_sg.id
+}
+
+output "redis_db_sg_id" {
+  value = aws_security_group.redis_sg.id
+}
