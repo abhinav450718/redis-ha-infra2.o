@@ -1,34 +1,27 @@
 variable "vpc_cidr" {
-  type        = string
-  description = "CIDR for the VPC"
+  type = string
 }
 
 variable "public_subnet_cidr" {
-  type        = string
-  description = "CIDR for public subnet"
+  type = string
 }
 
 variable "private1_subnet_cidr" {
-  type        = string
-  description = "CIDR for private subnet 1 (master)"
+  type = string
 }
 
 variable "private2_subnet_cidr" {
-  type        = string
-  description = "CIDR for private subnet 2 (replica)"
+  type = string
 }
 
 variable "aws_region" {
-  type        = string
-  description = "AWS region, e.g., sa-east-1"
+  type = string
 }
 
 variable "project_tag" {
-  type        = string
-  description = "Tag for project name"
+  type = string
 }
 
 variable "bastion_ssh_cidr" {
-  type        = string
-  description = "Your public IP/CIDR allowed to SSH into bastion"
+  type = string
 }
