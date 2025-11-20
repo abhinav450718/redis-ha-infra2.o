@@ -2,9 +2,11 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION  = "sa-east-1"
-        TF_DIR      = "terraform"
-        ANSIBLE_DIR = "ansible"
+        AWS_REGION   = "sa-east-1"
+        TF_DIR       = "terraform"
+        ANSIBLE_DIR  = "ansible"
+        SCRIPTS_DIR  = "scripts"
+        PRIVATE_KEY  = "/var/lib/jenkins/redis-ha-key.pem"
     }
 
     stages {
@@ -25,27 +27,31 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
+
                         sh '''
-                          terraform init -input=false
-                          terraform fmt -recursive || true
-                          terraform validate
+                            terraform init -input=false
+                            terraform fmt -recursive || true
+                            terraform validate
 
-                          terraform plan -out=tfplan -var="aws_region=$AWS_REGION"
-                          terraform apply -auto-approve tfplan
+                            terraform plan -out=tfplan -var="aws_region=$AWS_REGION"
+                            terraform apply -auto-approve tfplan
+                        '''
 
-                          terraform output -json > ../terraform_outputs.json
-                          terraform output -raw private_key_pem > ../redis-ha-key.pem
+                        // save key to Jenkins host
+                        sh '''
+                            terraform output -raw private_key_pem > $PRIVATE_KEY
+                            chmod 600 $PRIVATE_KEY
                         '''
                     }
                 }
             }
         }
 
-        stage('Install AWS Python SDK (for dynamic inventory)') {
+        stage('Install AWS Python SDK (boto3)') {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                      pip3 install boto3 botocore --break-system-packages
+                        pip3 install boto3 botocore --break-system-packages
                     '''
                 }
             }
@@ -61,10 +67,8 @@ pipeline {
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
                         sh '''
-                          export AWS_REGION='sa-east-1'
-                          export SSH_KEY="$WORKSPACE/redis-ha-key.pem"
-
-                          ansible-inventory -i inventory/aws_ec2.yml --graph
+                            export SSH_KEY=$PRIVATE_KEY
+                            ansible-inventory -i inventory/aws_ec2.yml --graph
                         '''
                     }
                 }
@@ -80,27 +84,32 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
-                        sh '''
-                          export AWS_REGION='sa-east-1'
-                          export SSH_KEY="$WORKSPACE/redis-ha-key.pem"
-                          export ANSIBLE_HOST_KEY_CHECKING=False
 
-                          ansible-playbook \
-                            -i inventory/aws_ec2.yml \
-                            redis_cluster.yml
+                        sh '''
+                            export SSH_KEY=$PRIVATE_KEY
+                            export ANSIBLE_HOST_KEY_CHECKING=False
+
+                            ansible-playbook -i inventory/aws_ec2.yml redis_cluster.yml
                         '''
                     }
+                }
+            }
+        }
+
+        stage('Verify Redis Replication') {
+            steps {
+                dir(SCRIPTS_DIR) {
+                    sh '''
+                        chmod +x verify_redis.sh
+                        ./verify_redis.sh $PRIVATE_KEY
+                    '''
                 }
             }
         }
     }
 
     post {
-        success {
-            echo "🎉 Redis HA deployed successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed — check logs."
-        }
+        success { echo "🎉 Redis HA deployed successfully!" }
+        failure { echo "❌ Pipeline failed — check logs." }
     }
 }
