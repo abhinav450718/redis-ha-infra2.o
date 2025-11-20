@@ -18,3 +18,9 @@ variable "ami_id" {
   type        = string
   default     = "ami-0fb731c579cdc06e9"
 }
+
+variable "bastion_ssh_cidr" {
+  description = "CIDR allowed to SSH into Bastion"
+  type        = string
+  default     = "0.0.0.0/0"
+}
