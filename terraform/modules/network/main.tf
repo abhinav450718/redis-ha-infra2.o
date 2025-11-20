@@ -1,36 +1,17 @@
-terraform {
-  required_version = ">= 1.0.0"
-}
-
-# No backend config here
-# No provider block here
-# No module block here
-
-# -----------------------------
-# VPC
-# -----------------------------
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-
+  cidr_block = var.vpc_cidr
   tags = {
-    Name    = "redis-vpc"
-    Project = var.project_tag
+    Name = "${var.project_tag}-vpc"
   }
 }
 
-# -----------------------------
-# SUBNETS
-# -----------------------------
 resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_cidr
   map_public_ip_on_launch = true
 
   tags = {
-    Name    = "public-subnet"
-    Project = var.project_tag
+    Name = "${var.project_tag}-public-subnet"
   }
 }
 
@@ -39,8 +20,7 @@ resource "aws_subnet" "private1" {
   cidr_block = var.private1_subnet_cidr
 
   tags = {
-    Name    = "private1-subnet"
-    Project = var.project_tag
+    Name = "${var.project_tag}-private1-subnet"
   }
 }
 
@@ -49,48 +29,14 @@ resource "aws_subnet" "private2" {
   cidr_block = var.private2_subnet_cidr
 
   tags = {
-    Name    = "private2-subnet"
-    Project = var.project_tag
+    Name = "${var.project_tag}-private2-subnet"
   }
 }
 
-# -----------------------------
-# INTERNET GATEWAY + PUBLIC RT
-# -----------------------------
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name    = "redis-gw"
-    Project = var.project_tag
-  }
-}
-
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name    = "public-rt"
-    Project = var.project_tag
-  }
-}
-
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public_rt.id
-}
-
-# -----------------------------
-# SECURITY GROUPS
-# -----------------------------
 resource "aws_security_group" "bastion_sg" {
-  name   = "bastion-sg"
-  vpc_id = aws_vpc.main.id
+  name        = "${var.project_tag}-bastion-sg"
+  description = "allow ssh"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 22
@@ -107,16 +53,10 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-resource "aws_security_group" "redis_db_sg" {
-  name   = "redis-db-sg"
-  vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.bastion_sg.id]
-  }
+resource "aws_security_group" "redis_sg" {
+  name        = "${var.project_tag}-redis-sg"
+  description = "allow redis cluster"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 6379
@@ -131,31 +71,4 @@ resource "aws_security_group" "redis_db_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-# -----------------------------
-# OUTPUTS
-# -----------------------------
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
-output "public_subnet_id" {
-  value = aws_subnet.public.id
-}
-
-output "private1_subnet_id" {
-  value = aws_subnet.private1.id
-}
-
-output "private2_subnet_id" {
-  value = aws_subnet.private2.id
-}
-
-output "bastion_sg_id" {
-  value = aws_security_group.bastion_sg.id
-}
-
-output "redis_db_sg_id" {
-  value = aws_security_group.redis_db_sg.id
 }
