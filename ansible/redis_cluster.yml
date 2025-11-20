@@ -12,7 +12,7 @@
     - name: Allow remote connections on master
       lineinfile:
         path: /etc/redis.conf
-        regexp: '^bind '
+        regexp: '^bind'
         line: 'bind 0.0.0.0'
       notify: restart redis
 
