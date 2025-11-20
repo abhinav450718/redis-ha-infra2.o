@@ -1,0 +1,12 @@
+---
+- name: Configure Redis Master
+  hosts: master-redis
+  become: yes
+  roles:
+    - geerlingguy.redis
+
+- name: Configure Redis Replica
+  hosts: replica-redis
+  become: yes
+  roles:
+    - geerlingguy.redis
