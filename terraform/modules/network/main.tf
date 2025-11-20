@@ -1,170 +1,80 @@
-########################
-# VPC
-########################
+terraform {
+  required_version = ">= 1.5.0"
 
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-
-  tags = {
-    Name    = "redis-ha-vpc"
-    Project = var.project_tag
+  backend "s3" {
+    bucket = "redis-ha-terraform-state"
+    key    = "state/terraform.tfstate"
+    region = "sa-east-1"
   }
 }
 
-########################
-# Internet Gateway
-########################
-
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name    = "redis-ha-igw"
-    Project = var.project_tag
-  }
+provider "aws" {
+  region = var.aws_region
 }
 
-########################
-# Subnets
-########################
+module "network" {
+  source               = "./modules/network"
 
-# Public subnet (bastion)
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = "${var.aws_region}a"
-  map_public_ip_on_launch = true
+  vpc_cidr             = "10.0.0.0/16"
+  public_subnet_cidr   = "10.0.1.0/24"
+  private1_subnet_cidr = "10.0.2.0/24"
+  private2_subnet_cidr = "10.0.3.0/24"
 
-  tags = {
-    Name    = "redis-ha-public"
-    Project = var.project_tag
-  }
+  aws_region        = var.aws_region
+  project_tag       = var.project_tag
+  bastion_ssh_cidr  = var.bastion_ssh_cidr
 }
 
-# Private subnet 1 (redis master)
-resource "aws_subnet" "private1" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private1_subnet_cidr
-  availability_zone = "${var.aws_region}a"
-
-  tags = {
-    Name    = "redis-ha-private1"
-    Project = var.project_tag
-  }
+module "bastion" {
+  source             = "./modules/bastion"
+  subnet_id          = module.network.public_subnet_id
+  security_group_id  = module.network.bastion_sg_id
+  key_name           = aws_key_pair.redis_keypair.key_name
+  ami_id             = var.ami_id
+  project_tag        = var.project_tag
 }
 
-# Private subnet 2 (redis replica)
-resource "aws_subnet" "private2" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private2_subnet_cidr
-  availability_zone = "${var.aws_region}a"
-
-  tags = {
-    Name    = "redis-ha-private2"
-    Project = var.project_tag
-  }
+module "redis_master" {
+  source             = "./modules/redis-master"
+  subnet_id          = module.network.private1_subnet_id
+  security_group_id  = module.network.redis_db_sg_id
+  key_name           = aws_key_pair.redis_keypair.key_name
+  ami_id             = var.ami_id
+  project_tag        = var.project_tag
 }
 
-########################
-# Route tables
-########################
-
-# Public route table (to Internet)
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name    = "redis-ha-public-rt"
-    Project = var.project_tag
-  }
+module "redis_replica" {
+  source             = "./modules/redis-replica"
+  subnet_id          = module.network.private2_subnet_id
+  security_group_id  = module.network.redis_db_sg_id
+  key_name           = aws_key_pair.redis_keypair.key_name
+  ami_id             = var.ami_id
+  project_tag        = var.project_tag
 }
 
-# Associate public subnet with public route table
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
+resource "tls_private_key" "redis_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
-# NOTE:
-# We leave private1/private2 on the main route table (local only).
-# That’s enough for bastion → private instances SSH via VPC.
-
-########################
-# Security Groups
-########################
-
-# Bastion SG – SSH from your IP + allow egress anywhere
-resource "aws_security_group" "bastion_sg" {
-  name        = "bastion-sg"
-  description = "Allow SSH from admin, egress to anywhere"
-  vpc_id      = aws_vpc.main.id
-
-  # SSH from your public IP or office IP
-  ingress {
-    description = "SSH from admin"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.bastion_ssh_cidr]
-  }
-
-  egress {
-    description = "allow all egress"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name    = "bastion-sg"
-    Project = var.project_tag
-  }
+resource "aws_key_pair" "redis_keypair" {
+  key_name   = "redis-ha-key"
+  public_key = tls_private_key.redis_key.public_key_openssh
 }
 
-# Redis DB SG – SSH from bastion + Redis from inside VPC
-resource "aws_security_group" "db_sg" {
-  name        = "redis-db-sg"
-  description = "Redis DB SG – SSH from bastion and Redis port inside VPC"
-  vpc_id      = aws_vpc.main.id
+output "private_key_pem" {
+  value     = tls_private_key.redis_key.private_key_pem
+  sensitive = true
+}
 
-  # SSH only from bastion SG
-  ingress {
-    description      = "SSH from bastion"
-    from_port        = 22
-    to_port          = 22
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.bastion_sg.id]
-    cidr_blocks      = []
-    ipv6_cidr_blocks = []
-  }
+output "master_ip" {
+  value = module.redis_master.master_private_ip
+}
 
-  # Redis port 6379 from inside VPC (master <-> replica, bastion tests, etc.)
-  ingress {
-    description = "Redis 6379 inside VPC"
-    from_port   = 6379
-    to_port     = 6379
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
+output "replica_ip" {
+  value = module.redis_replica.replica_private_ip
+}
 
-  egress {
-    description = "allow all egress"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name    = "redis-db-sg"
-    Project = var.project_tag
-  }
+output "bastion_ip" {
+  value = module.bastion.bastion_public_ip
 }
