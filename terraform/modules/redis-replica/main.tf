@@ -6,8 +6,8 @@ resource "aws_instance" "replica" {
   key_name               = var.key_name
 
   tags = {
-    Name    = "replica-redis"
-    Role    = "replica-redis"
+    Name    = "redis-replica"
+    Role    = "replica"
     Project = var.project_tag
   }
 }
