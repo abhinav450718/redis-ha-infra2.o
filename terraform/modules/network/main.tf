@@ -2,9 +2,6 @@ terraform {
   required_version = ">= 1.0.0"
 }
 
-# -------------------------
-#  VPC
-# -------------------------
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -16,9 +13,6 @@ resource "aws_vpc" "main" {
   }
 }
 
-# -------------------------
-# Public Subnet
-# -------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
@@ -30,9 +24,6 @@ resource "aws_subnet" "public" {
   }
 }
 
-# -------------------------
-# Private Subnet 1
-# -------------------------
 resource "aws_subnet" "private1" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private1_subnet_cidr
@@ -43,9 +34,6 @@ resource "aws_subnet" "private1" {
   }
 }
 
-# -------------------------
-# Private Subnet 2
-# -------------------------
 resource "aws_subnet" "private2" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private2_subnet_cidr
@@ -56,9 +44,6 @@ resource "aws_subnet" "private2" {
   }
 }
 
-# -------------------------
-# Internet Gateway
-# -------------------------
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
 }
@@ -77,9 +62,6 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-# -------------------------
-# Bastion SG
-# -------------------------
 resource "aws_security_group" "bastion_sg" {
   name   = "bastion-sg"
   vpc_id = aws_vpc.main.id
@@ -99,9 +81,6 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-# -------------------------
-# Redis SG
-# -------------------------
 resource "aws_security_group" "redis_sg" {
   name   = "redis-sg"
   vpc_id = aws_vpc.main.id
@@ -126,13 +105,6 @@ resource "aws_security_group" "redis_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-# -------------------------
-# Outputs
-# -------------------------
-output "vpc_id" {
-  value = aws_vpc.main.id
 }
 
 output "public_subnet_id" {
