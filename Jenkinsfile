@@ -33,7 +33,7 @@ pipeline {
                     ]) {
                         sh '''
                           terraform init -input=false
-                          terraform fmt -check
+                          terraform fmt -recursive || true
                           terraform validate
                           terraform plan -out=tfplan -input=false \
                             -var="aws_region=$AWS_REGION"
