@@ -69,12 +69,11 @@ pipeline {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                        echo "=== Installing boto3 + botocore for AWS inventory plugin ==="
-                        pip3 install boto3 botocore --user
+                        echo "=== Installing boto3 + botocore via apt (safe method) ==="
+                        sudo apt-get update -y
+                        sudo apt-get install -y python3-boto3 python3-botocore
 
-                        echo "=== Ensuring correct ansible plugin path ==="
-                        mkdir -p ~/.ansible/plugins/inventory
-                        cp inventory/aws_ec2.yml ~/.ansible/plugins/inventory/aws_ec2.yml
+                        echo "=== boto3 + botocore ready ==="
                     '''
                 }
             }
@@ -94,7 +93,6 @@ pipeline {
         stage('Configure Redis with Ansible') {
             steps {
                 dir(ANSIBLE_DIR) {
-
                     withCredentials([
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
                         [$class: 'UsernamePasswordMultiBinding',
@@ -102,7 +100,6 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
-
                         sh '''
                           export ANSIBLE_HOST_KEY_CHECKING=False
 
