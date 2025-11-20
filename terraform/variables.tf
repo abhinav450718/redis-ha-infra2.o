@@ -16,5 +16,5 @@ variable "key_name" {
 
 variable "ami_id" {
   type        = string
-  default     = "ami-0b2299bbae9e327ed"
+  default     = "ami-0f5da011d8aca4812"
 }
