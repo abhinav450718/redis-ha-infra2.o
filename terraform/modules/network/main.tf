@@ -77,7 +77,6 @@ resource "aws_security_group" "bastion_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
-    description = "SSH from Admin"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -102,15 +101,13 @@ resource "aws_security_group" "redis_db_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
-    description = "SSH from Bastion"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
   ingress {
-    description = "Redis"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
