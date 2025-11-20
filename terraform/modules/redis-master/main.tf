@@ -3,7 +3,9 @@ resource "aws_instance" "master" {
   instance_type          = "t3.micro"
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
-  key_name               = var.key_name
+
+  # IMPORTANT — always use the key created by Terraform
+  key_name = var.key_name
 
   tags = {
     Name    = "redis-master"
