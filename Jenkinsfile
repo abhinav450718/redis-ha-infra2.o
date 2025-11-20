@@ -10,7 +10,6 @@ pipeline {
 
     stages {
 
-        /* ---------------------- GIT CHECKOUT ---------------------- */
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -18,16 +17,15 @@ pipeline {
             }
         }
 
-        /* ---------------------- TERRAFORM ------------------------- */
         stage('Terraform Apply (Auto)') {
             steps {
                 dir(TF_DIR) {
-                    withCredentials([
-                        [$class: 'UsernamePasswordMultiBinding',
-                         credentialsId: 'aws-creds',
-                         usernameVariable: 'AWS_ACCESS_KEY_ID',
-                         passwordVariable: 'AWS_SECRET_ACCESS_KEY']
-                    ]) {
+                    withCredentials([[
+                        $class: 'UsernamePasswordMultiBinding',
+                        credentialsId: 'aws-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ]]) {
 
                         sh '''
                           terraform init -input=false
@@ -36,7 +34,6 @@ pipeline {
 
                           terraform plan -out=tfplan -var="aws_region=$AWS_REGION"
                           terraform apply -auto-approve tfplan
-
                           terraform output -json > ../terraform_outputs.json
                         '''
                     }
@@ -44,7 +41,6 @@ pipeline {
             }
         }
 
-        /* ---------------------- PYTHON SDK ------------------------- */
         stage('Install AWS Python SDK') {
             steps {
                 dir(ANSIBLE_DIR) {
@@ -56,17 +52,15 @@ pipeline {
             }
         }
 
-        /* ---------------------- DYNAMIC INVENTORY ------------------ */
         stage('Test Dynamic Inventory') {
             steps {
                 dir(ANSIBLE_DIR) {
-                    withCredentials([
-                        [$class: 'UsernamePasswordMultiBinding',
-                         credentialsId: 'aws-creds',
-                         usernameVariable: 'AWS_ACCESS_KEY_ID',
-                         passwordVariable: 'AWS_SECRET_ACCESS_KEY']
-                    ]) {
-
+                    withCredentials([[
+                      $class: 'UsernamePasswordMultiBinding',
+                      credentialsId: 'aws-creds',
+                      usernameVariable: 'AWS_ACCESS_KEY_ID',
+                      passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ]]) {
                         sh '''
                           export AWS_REGION=sa-east-1
                           ansible-inventory -i inventory/aws_ec2.yml --list
@@ -77,11 +71,9 @@ pipeline {
             }
         }
 
-        /* ---------------------- ANSIBLE CONFIG --------------------- */
         stage('Configure Redis via Ansible') {
             steps {
                 dir(ANSIBLE_DIR) {
-
                     withCredentials([
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
                         [$class: 'UsernamePasswordMultiBinding',
@@ -89,10 +81,10 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
-
                         sh '''
-                          export AWS_REGION=sa-east-1
                           export ANSIBLE_HOST_KEY_CHECKING=False
+                          export SSH_KEY=$SSH_KEY
+                          export AWS_REGION=sa-east-1
 
                           ansible-playbook \
                             -i inventory/aws_ec2.yml \
@@ -104,21 +96,14 @@ pipeline {
             }
         }
 
-        /* ---------------------- VERIFY REDIS ----------------------- */
         stage('Verify Redis Replication') {
             steps {
                 dir(SCRIPTS_DIR) {
-
                     withCredentials([
-                        sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
-                        [$class: 'UsernamePasswordMultiBinding',
-                         credentialsId: 'aws-creds',
-                         usernameVariable: 'AWS_ACCESS_KEY_ID',
-                         passwordVariable: 'AWS_SECRET_ACCESS_KEY']
+                        sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY')
                     ]) {
 
                         sh '''
-                          export AWS_REGION=sa-east-1
                           chmod +x verify_redis.sh
                           ./verify_redis.sh "$SSH_KEY"
                         '''
