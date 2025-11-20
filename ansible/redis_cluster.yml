@@ -2,20 +2,62 @@
 - name: Configure Redis Master
   hosts: master
   become: yes
-  roles:
-    - geerlingguy.redis
-  vars:
-    redis_port: 6379
-    redis_bind: "0.0.0.0"
-    redis_replication_role: "master"
+
+  tasks:
+    - name: Install redis
+      yum:
+        name: redis
+        state: present
+
+    - name: Allow remote connections on master
+      lineinfile:
+        path: /etc/redis.conf
+        regexp: '^bind '
+        line: 'bind 0.0.0.0'
+      notify: restart redis
+
+    - name: Enable & start redis master
+      service:
+        name: redis
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart redis
+      service:
+        name: redis
+        state: restarted
+
 
 - name: Configure Redis Replica
   hosts: replica
   become: yes
-  roles:
-    - geerlingguy.redis
+
   vars:
-    redis_port: 6379
-    redis_bind: "0.0.0.0"
-    redis_replication_role: "slave"
-    redis_master_ip: "{{ hostvars[groups['master'][0]].ansible_host }}"
+    master_ip: "{{ hostvars[groups['master'][0]].ansible_host }}"
+
+  tasks:
+    - name: Install redis
+      yum:
+        name: redis
+        state: present
+
+    - name: Configure replica
+      blockinfile:
+        path: /etc/redis.conf
+        block: |
+          bind 0.0.0.0
+          replicaof {{ master_ip }} 6379
+      notify: restart redis
+
+    - name: Enable & start redis replica
+      service:
+        name: redis
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart redis
+      service:
+        name: redis
+        state: restarted
