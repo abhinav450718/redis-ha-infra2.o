@@ -1,80 +1,138 @@
 terraform {
   required_version = ">= 1.0.0"
+}
 
-  backend "s3" {
-    bucket = "redis-ha-terraform-state"
-    key    = "state/terraform.tfstate"
-    region = "sa-east-1"
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name    = "redis-vpc"
+    Project = var.project_tag
   }
 }
 
-provider "aws" {
-  region = var.aws_region
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name    = "public-subnet"
+    Project = var.project_tag
+  }
 }
 
-module "network" {
-  source               = "./modules/network"
+resource "aws_subnet" "private1" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.private1_subnet_cidr
 
-  vpc_cidr             = "10.0.0.0/16"
-  public_subnet_cidr   = "10.0.1.0/24"
-  private1_subnet_cidr = "10.0.2.0/24"
-  private2_subnet_cidr = "10.0.3.0/24"
-
-  aws_region        = var.aws_region
-  project_tag       = var.project_tag
-  bastion_ssh_cidr  = var.bastion_ssh_cidr
+  tags = {
+    Name    = "private-subnet-1"
+    Project = var.project_tag
+  }
 }
 
-module "bastion" {
-  source            = "./modules/bastion"
-  subnet_id         = module.network.public_subnet_id
-  security_group_id = module.network.bastion_sg_id
-  key_name          = aws_key_pair.redis_keypair.key_name
-  ami_id            = var.ami_id
-  project_tag       = var.project_tag
+resource "aws_subnet" "private2" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.private2_subnet_cidr
+
+  tags = {
+    Name    = "private-subnet-2"
+    Project = var.project_tag
+  }
 }
 
-module "redis_master" {
-  source            = "./modules/redis-master"
-  subnet_id         = module.network.private1_subnet_id
-  security_group_id = module.network.redis_db_sg_id
-  key_name          = aws_key_pair.redis_keypair.key_name
-  ami_id            = var.ami_id
-  project_tag       = var.project_tag
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name    = "redis-gw"
+    Project = var.project_tag
+  }
 }
 
-module "redis_replica" {
-  source            = "./modules/redis-replica"
-  subnet_id         = module.network.private2_subnet_id
-  security_group_id = module.network.redis_db_sg_id
-  key_name          = aws_key_pair.redis_keypair.key_name
-  ami_id            = var.ami_id
-  project_tag       = var.project_tag
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name    = "public-rt"
+    Project = var.project_tag
+  }
 }
 
-resource "tls_private_key" "redis_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public_rt.id
 }
 
-resource "aws_key_pair" "redis_keypair" {
-  key_name   = "redis-ha-key"
-  public_key = tls_private_key.redis_key.public_key_openssh
+resource "aws_security_group" "bastion_sg" {
+  name   = "bastion-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description = "SSH from Admin"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.bastion_ssh_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "bastion-sg"
+    Project = var.project_tag
+  }
 }
 
-output "private_key_pem" {
-  value     = tls_private_key.redis_key.private_key_pem
-  sensitive = true
+resource "aws_security_group" "redis_db_sg" {
+  name   = "redis-db-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description = "SSH from Bastion"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
+  }
+
+  ingress {
+    description = "Redis"
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "redis-db-sg"
+    Project = var.project_tag
+  }
 }
 
-output "master_ip" {
-  value = module.redis_master.private_ip
-}
-
-output "replica_ip" {
-  value = module.redis_replica.private_ip
-}
-
-output "bastion_ip" {
-  value = module.bastion.public_ip
-}
+output "vpc_id"               { value = aws_vpc.main.id }
+output "public_subnet_id"     { value = aws_subnet.public.id }
+output "private1_subnet_id"   { value = aws_subnet.private1.id }
+output "private2_subnet_id"   { value = aws_subnet.private2.id }
+output "bastion_sg_id"        { value = aws_security_group.bastion_sg.id }
+output "redis_db_sg_id"       { value = aws_security_group.redis_db_sg.id }
