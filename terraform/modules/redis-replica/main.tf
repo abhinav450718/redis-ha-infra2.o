@@ -1,13 +1,11 @@
-resource "aws_instance" "replica" {
-  ami                    = var.ami_id
-  instance_type          = "t3.micro"
+resource "aws_instance" "redis_replica" {
+  ami                    = var.ami
+  instance_type          = var.instance_type
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
   key_name               = var.key_name
 
   tags = {
-    Name    = "redis-replica"
-    Role    = "replica"
-    Project = var.project_tag
+    Name = "redis-replica"
   }
 }
