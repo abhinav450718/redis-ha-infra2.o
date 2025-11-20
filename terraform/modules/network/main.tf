@@ -2,6 +2,13 @@ terraform {
   required_version = ">= 1.0.0"
 }
 
+provider "aws" {
+  region = var.aws_region
+}
+
+# -------------------------
+#  VPC
+# -------------------------
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -13,6 +20,9 @@ resource "aws_vpc" "main" {
   }
 }
 
+# -------------------------
+#  Public Subnet
+# -------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
@@ -24,6 +34,9 @@ resource "aws_subnet" "public" {
   }
 }
 
+# -------------------------
+#  Private Subnet 1
+# -------------------------
 resource "aws_subnet" "private1" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private1_subnet_cidr
@@ -34,6 +47,9 @@ resource "aws_subnet" "private1" {
   }
 }
 
+# -------------------------
+#  Private Subnet 2
+# -------------------------
 resource "aws_subnet" "private2" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private2_subnet_cidr
@@ -44,6 +60,9 @@ resource "aws_subnet" "private2" {
   }
 }
 
+# -------------------------
+#  IGW
+# -------------------------
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
 
@@ -53,6 +72,9 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
+# -------------------------
+#  Public Route Table
+# -------------------------
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
 
@@ -72,6 +94,9 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
+# -------------------------
+#  Bastion SG
+# -------------------------
 resource "aws_security_group" "bastion_sg" {
   name   = "bastion-sg"
   vpc_id = aws_vpc.main.id
@@ -96,20 +121,21 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
+# -------------------------
+#  Redis SG
+# -------------------------
 resource "aws_security_group" "redis_db_sg" {
   name   = "redis-db-sg"
   vpc_id = aws_vpc.main.id
 
   ingress {
-    description = "SSH from Bastion"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
   ingress {
-    description = "Redis"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
@@ -129,6 +155,9 @@ resource "aws_security_group" "redis_db_sg" {
   }
 }
 
+# -------------------------
+# Outputs
+# -------------------------
 output "vpc_id" {
   value = aws_vpc.main.id
 }
