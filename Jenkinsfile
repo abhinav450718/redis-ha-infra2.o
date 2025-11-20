@@ -8,21 +8,13 @@ pipeline {
         SCRIPTS_DIR  = "scripts"
     }
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-    }
-
     stages {
 
         stage('Checkout Code') {
-            steps {
-                checkout scm
-                echo "Repo checked out successfully."
-            }
+            steps { checkout scm }
         }
 
-        stage('Terraform Init & Apply') {
+        stage('Terraform Apply (Auto)') {
             steps {
                 dir(TF_DIR) {
                     withCredentials([
@@ -36,10 +28,9 @@ pipeline {
                           terraform fmt -recursive || true
                           terraform validate
 
-                          terraform plan -out=tfplan \
-                            -var="aws_region=$AWS_REGION"
-
+                          terraform plan -out=tfplan -var="aws_region=$AWS_REGION"
                           terraform apply -auto-approve tfplan
+
                           terraform output -json > ../terraform_outputs.json
                         '''
                     }
@@ -47,34 +38,31 @@ pipeline {
             }
         }
 
-        stage('Prepare Ansible Environment') {
+        stage('Install Python AWS SDK for Dynamic Inventory') {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                        echo "=== Installing boto3 + botocore for AWS dynamic inventory ==="
-                        pip3 install boto3 botocore --break-system-packages
-
-                        echo "=== boto3 ready ==="
+                      pip3 install boto3 botocore --break-system-packages
+                      echo "boto3 installed"
                     '''
                 }
             }
         }
 
-        stage('Show Dynamic Inventory') {
+        stage('Test Dynamic Inventory') {
             steps {
                 dir(ANSIBLE_DIR) {
                     sh '''
-                        ansible-inventory -i inventory/aws_ec2.yml --list
-                        ansible-inventory -i inventory/aws_ec2.yml --graph
+                      ansible-inventory -i inventory/aws_ec2.yml --list
+                      ansible-inventory -i inventory/aws_ec2.yml --graph
                     '''
                 }
             }
         }
 
-        stage('Configure Redis with Ansible') {
+        stage('Configure Redis via Ansible') {
             steps {
                 dir(ANSIBLE_DIR) {
-
                     withCredentials([
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY'),
                         [$class: 'UsernamePasswordMultiBinding',
@@ -82,7 +70,6 @@ pipeline {
                          usernameVariable: 'AWS_ACCESS_KEY_ID',
                          passwordVariable: 'AWS_SECRET_ACCESS_KEY']
                     ]) {
-
                         sh '''
                           export ANSIBLE_HOST_KEY_CHECKING=False
 
@@ -104,6 +91,7 @@ pipeline {
                         sshUserPrivateKey(credentialsId: 'redis-ssh-key', keyFileVariable: 'SSH_KEY')
                     ]) {
                         sh '''
+                          chmod +x verify_redis.sh
                           ./verify_redis.sh "$SSH_KEY"
                         '''
                     }
@@ -113,14 +101,7 @@ pipeline {
     }
 
     post {
-        success {
-            echo "🎉 Redis HA Deployment Completed Successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed. Check logs."
-        }
-        always {
-            archiveArtifacts artifacts: 'terraform_outputs.json', onlyIfSuccessful: true
-        }
+        success { echo "🎉 Redis HA deployed successfully!" }
+        failure { echo "❌ Pipeline failed, check logs." }
     }
 }
