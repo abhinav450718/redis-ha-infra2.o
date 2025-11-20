@@ -3,25 +3,20 @@ plugin: aws_ec2
 regions:
   - sa-east-1
 
-aws_access_key: "{{ lookup('env','AWS_ACCESS_KEY_ID') }}"
-aws_secret_key: "{{ lookup('env','AWS_SECRET_ACCESS_KEY') }}"
-
 hostnames:
   - private-ip-address
-
-keyed_groups:
-  - key: tags.Role
-    prefix: ""
-    separator: ""
 
 compose:
   ansible_host: private_ip_address
 
+keyed_groups:
+  - key: tags.Role
+    prefix: ""
+
 vars:
   ansible_user: ec2-user
-  ansible_ssh_private_key_file: "{{ lookup('env','SSH_KEY') }}"
   ansible_ssh_common_args: >
     -o StrictHostKeyChecking=no
-    -o ProxyCommand="ssh -i {{ lookup('env','SSH_KEY') }}
+    -o ProxyCommand="ssh -i /var/lib/jenkins/redis-ha-key.pem
     -o StrictHostKeyChecking=no
     -W %h:%p ec2-user@56.125.164.56"
