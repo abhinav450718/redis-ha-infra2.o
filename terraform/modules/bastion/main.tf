@@ -3,6 +3,8 @@ resource "aws_instance" "bastion" {
   instance_type          = "t3.micro"
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
+
+  # Use same Terraform-generated key
   key_name               = var.key_name
 
   tags = {
