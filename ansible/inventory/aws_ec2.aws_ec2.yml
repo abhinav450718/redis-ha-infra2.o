@@ -1,15 +1,9 @@
-plugin: aws_ec2
-
+plugin: amazon.aws.aws_ec2
 regions:
   - sa-east-1
 
 filters:
-  tag:Project: redis-ha-demo
-
-keyed_groups:
-  - key: tags.Name
-    prefix: ""
-    separator: ""
+  tag:Project: "redis-ha-demo"
 
 hostnames:
   - public-ip-address
@@ -17,5 +11,10 @@ hostnames:
 
 compose:
   ansible_host: public_ip_address
+
+groups:
+  master_redis: "'master' in tags.Role"
+  replica_redis: "'replica' in tags.Role"
+  bastion: "'bastion' in tags.Role"
 
 strict: False
