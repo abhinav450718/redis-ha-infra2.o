@@ -6,7 +6,7 @@ resource "aws_vpc" "main" {
   }
 }
 
-resource "aws_subnet" "public" {
+resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
   map_public_ip_on_launch = true
@@ -16,7 +16,7 @@ resource "aws_subnet" "public" {
   }
 }
 
-resource "aws_subnet" "private1" {
+resource "aws_subnet" "private1_subnet" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private1_subnet_cidr
 
@@ -25,7 +25,7 @@ resource "aws_subnet" "private1" {
   }
 }
 
-resource "aws_subnet" "private2" {
+resource "aws_subnet" "private2_subnet" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.private2_subnet_cidr
 
@@ -35,10 +35,12 @@ resource "aws_subnet" "private2" {
 }
 
 resource "aws_security_group" "bastion_sg" {
-  name   = "${var.project_tag}-bastion-sg"
-  vpc_id = aws_vpc.main.id
+  name        = "${var.project_tag}-bastion-sg"
+  description = "Allow SSH"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -53,15 +55,16 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-resource "aws_security_group" "redis_sg" {
-  name   = "${var.project_tag}-redis-sg"
-  vpc_id = aws_vpc.main.id
+resource "aws_security_group" "redis_db_sg" {
+  name        = "${var.project_tag}-redis-db-sg"
+  description = "Allow Redis ports between master and replica"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = [aws_subnet.private1_subnet.cidr_block, aws_subnet.private2_subnet.cidr_block]
   }
 
   egress {
@@ -70,4 +73,24 @@ resource "aws_security_group" "redis_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+output "public_subnet_id" {
+  value = aws_subnet.public_subnet.id
+}
+
+output "private1_subnet_id" {
+  value = aws_subnet.private1_subnet.id
+}
+
+output "private2_subnet_id" {
+  value = aws_subnet.private2_subnet.id
+}
+
+output "bastion_sg_id" {
+  value = aws_security_group.bastion_sg.id
+}
+
+output "redis_db_sg_id" {
+  value = aws_security_group.redis_db_sg.id
 }
