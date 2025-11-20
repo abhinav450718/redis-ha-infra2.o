@@ -21,6 +21,4 @@ vars:
   ansible_user: ec2-user
   ansible_ssh_common_args: >
     -o StrictHostKeyChecking=no
-    -o ProxyCommand="ssh -i {{ lookup('env','SSH_KEY') }}
-    -o StrictHostKeyChecking=no
-    -W %h:%p ec2-user@56.125.164.56"
+    -o ProxyCommand="ssh -i {{ lookup('env','SSH_KEY') }} -o StrictHostKeyChecking=no -W %h:%p ec2-user@{{ groups['bastion'][0] }}"
