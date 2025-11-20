@@ -10,7 +10,7 @@ variable "project_tag" {
 
 variable "key_name" {
   type        = string
-  description = "SSH key name"
+  default = "redis-ha-key"
 }
 
 variable "ami_id" {
